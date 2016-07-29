@@ -331,6 +331,10 @@ func (expect *ExpectSubprocess) Interact() {
 	go io.Copy(expect.buf.f, os.Stdin)
 }
 
+func (expect *ExpectSubprocess) ProcessState() *os.ProcessState {
+	return expect.Cmd.ProcessState
+}
+
 func (expect *ExpectSubprocess) ReadUntil(delim byte) ([]byte, error) {
 	join := make([]byte, 1, 512)
 	chunk := make([]byte, 255)
