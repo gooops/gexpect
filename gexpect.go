@@ -25,6 +25,7 @@ type ExpectSubprocess struct {
 	Cmd          *exec.Cmd
 	buf          *buffer
 	outputBuffer []byte
+	r,w *os.File
 }
 
 type buffer struct {
@@ -147,6 +148,7 @@ func Spawn(command string) (*ExpectSubprocess, error) {
 }
 
 func (expect *ExpectSubprocess) Close() error {
+	expect.r.Close()
 	if err := expect.Cmd.Process.Kill(); err != nil {
 		return err
 	}
@@ -324,10 +326,27 @@ func (expect *ExpectSubprocess) SendLine(command string) error {
 	return err
 }
 
-func (expect *ExpectSubprocess) Interact() {
+func (expect *ExpectSubprocess) Interact(outch chan []byte) {
+	expect.r,expect.w,_ = os.Pipe()
 	defer expect.Cmd.Wait()
-	io.Copy(os.Stdout, &expect.buf.b)
-	go io.Copy(os.Stdout, expect.buf.f)
+	go func() {
+		for {
+			var s = make([]byte, 1024)
+			n, err := expect.r.Read(s)
+			reader := bytes.NewReader(s[:n])
+			if outch !=nil{
+				outch <- s
+			}
+			io.Copy(os.Stdout,reader)
+			if err == io.EOF {
+				break
+			}
+		}
+	}()
+	// io.Copy(os.Stdout, &expect.buf.b)
+	io.Copy(expect.w, &expect.buf.b)
+	// go io.Copy(os.Stdout, expect.buf.f)
+	go io.Copy(expect.w, expect.buf.f)
 	go io.Copy(expect.buf.f, os.Stdin)
 }
 
