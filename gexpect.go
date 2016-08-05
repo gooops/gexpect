@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"time"
 	"unicode/utf8"
+	"sync"
 
 	shell "github.com/kballard/go-shellquote"
 	"github.com/kr/pty"
@@ -148,7 +149,6 @@ func Spawn(command string) (*ExpectSubprocess, error) {
 }
 
 func (expect *ExpectSubprocess) Close() error {
-	expect.r.Close()
 	if err := expect.Cmd.Process.Kill(); err != nil {
 		return err
 	}
@@ -328,7 +328,12 @@ func (expect *ExpectSubprocess) SendLine(command string) error {
 
 func (expect *ExpectSubprocess) Interact(outch chan []byte) {
 	expect.r,expect.w,_ = os.Pipe()
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	defer expect.r.Close()
+	defer expect.w.Close()
 	defer expect.Cmd.Wait()
+	wg.Add(1)
 	go func() {
 		for {
 			var s = make([]byte, 1024)
@@ -342,6 +347,7 @@ func (expect *ExpectSubprocess) Interact(outch chan []byte) {
 				break
 			}
 		}
+		wg.Done()
 	}()
 	// io.Copy(os.Stdout, &expect.buf.b)
 	io.Copy(expect.w, &expect.buf.b)
