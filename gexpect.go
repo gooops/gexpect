@@ -26,7 +26,6 @@ type ExpectSubprocess struct {
 	Cmd          *exec.Cmd
 	buf          *buffer
 	outputBuffer []byte
-	r,w *os.File
 }
 
 type buffer struct {
@@ -326,34 +325,40 @@ func (expect *ExpectSubprocess) SendLine(command string) error {
 	return err
 }
 
-func (expect *ExpectSubprocess) Interact(outch chan []byte) {
-	expect.r,expect.w,_ = os.Pipe()
+func (expect *ExpectSubprocess) Interact(outch *chan []byte) {
+	r,w,_ := os.Pipe()
 	var wg sync.WaitGroup
-	defer wg.Wait()
-	defer expect.r.Close()
-	defer expect.w.Close()
-	defer expect.Cmd.Wait()
+	// defer wg.Wait()
+	// defer r.Close()
+	// defer w.Close()
+	// defer expect.Cmd.Wait()
 	wg.Add(1)
 	go func() {
 		for {
 			var s = make([]byte, 1024)
-			n, err := expect.r.Read(s)
+			n, err := r.Read(s)
 			reader := bytes.NewReader(s[:n])
 			if outch !=nil{
-				outch <- s
+				*outch <- s
+			}
+			
+			if err!=nil{
+					break
 			}
 			io.Copy(os.Stdout,reader)
-			if err == io.EOF {
-				break
-			}
 		}
 		wg.Done()
 	}()
 	// io.Copy(os.Stdout, &expect.buf.b)
-	io.Copy(expect.w, &expect.buf.b)
+	io.Copy(w, &expect.buf.b)
 	// go io.Copy(os.Stdout, expect.buf.f)
-	go io.Copy(expect.w, expect.buf.f)
+	go io.Copy(w, expect.buf.f)
 	go io.Copy(expect.buf.f, os.Stdin)
+	
+	expect.Cmd.Wait()
+	w.Close()
+	r.Close()
+	wg.Wait()
 }
 
 func (expect *ExpectSubprocess) ProcessState() *os.ProcessState {
