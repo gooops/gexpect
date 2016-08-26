@@ -139,8 +139,8 @@ func (expect *ExpectSubprocess) Start() error {
 	return err
 }
 
-func Spawn(command string) (*ExpectSubprocess, error) {
-	expect, err := _spawn(command)
+func Spawn(command string,envs ...string) (*ExpectSubprocess, error) {
+	expect, err := _spawn(command,envs...)
 	if err != nil {
 		return nil, err
 	}
@@ -340,12 +340,12 @@ func (expect *ExpectSubprocess) Interact(outch *chan []byte) {
 			reader := bytes.NewReader(s[:n])
 			if outch !=nil{
 				*outch <- s
-			}
-			
+			 }else{
+				io.Copy(os.Stdout,reader)				 
+			 }		
 			if err!=nil{
 					break
 			}
-			io.Copy(os.Stdout,reader)
 		}
 		wg.Done()
 	}()
@@ -404,6 +404,7 @@ func (expect *ExpectSubprocess) ReadLine() (string, error) {
 
 func _start(expect *ExpectSubprocess) (*ExpectSubprocess, error) {
 	f, err := pty.Start(expect.Cmd)
+	
 	if err != nil {
 		return nil, err
 	}
@@ -412,7 +413,7 @@ func _start(expect *ExpectSubprocess) (*ExpectSubprocess, error) {
 	return expect, nil
 }
 
-func _spawn(command string) (*ExpectSubprocess, error) {
+func _spawn(command string,envs ...string) (*ExpectSubprocess, error) {
 	wrapper := new(ExpectSubprocess)
 
 	wrapper.outputBuffer = nil
@@ -434,6 +435,10 @@ func _spawn(command string) (*ExpectSubprocess, error) {
 		wrapper.Cmd = exec.Command(path, splitArgs[1:]...)
 	} else {
 		wrapper.Cmd = exec.Command(path)
+	}
+	wrapper.Cmd.Env = os.Environ()
+	if len(envs) >0 {
+		wrapper.Cmd.Env = append(wrapper.Cmd.Env[:],envs...)
 	}
 	wrapper.buf = new(buffer)
 
